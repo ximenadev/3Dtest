@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3D Test</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+/* Layout: full-height 3D stage with a compact control strip pinned below it */
+:root {
+  --bg: #e9e7e3; --stage: #dcd9d3; --fg: #1d1c1a; --muted: #6b6760; --line: #c9c5bd; --chip: #f6f5f2;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #181817; --stage: #22211f; --fg: #eeece8; --muted: #a29d94; --line: #3a3834; --chip: #2a2926; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #181817; --stage: #22211f; --fg: #eeece8; --muted: #a29d94; --line: #3a3834; --chip: #2a2926; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--display); display: flex; flex-direction: column; }
+#stage { flex: 1; min-height: 300px; position: relative; background: var(--stage); }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.panel { padding-block: 14px 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); width: 64px; flex: none; }
+button { font: 600 13px var(--display); color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.sw { width: 30px; height: 30px; padding: 0; border-radius: 50%; }
+.meta { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<div id="stage"><div id="status">Cargando modelos…</div></div>
+<div class="panel">
+  <div class="row"><span class="label">Vista</span>
+    <button id="v-apart" aria-pressed="true">Separados</button>
+    <button id="v-stack" aria-pressed="false">Bowl sobre plato</button>
+  </div>
+  <div class="row"><span class="label">Plato</span><div class="row" id="sw-plate"></div></div>
+  <div class="row"><span class="label">Bowl</span><div class="row" id="sw-bowl"></div></div>
+  <div class="meta" id="meta">Plato chico 17.5 × 2 cm · Bowl 15 × 7 cm · offset de apilado 6.8 mm</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Preview colors (sRGB)
+const GLAZES = { Azul: "#1f3fa8", Terracota: "#c0582f", Ocre: "#c99a2e", Menta: "#9fd3bf",
+  Negro: "#1c1c1e", "Blanco satín": "#efece4", Rosa: "#e7a3b3", Olivo: "#6f7340" };
+
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 10);
+camera.position.set(0.32, 0.26, 0.42);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.025, 0);
+controls.enableDamping = true; controls.minDistance = 0.18; controls.maxDistance = 1.2;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.4));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(0.4, 0.8, 0.3); key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
+Object.assign(key.shadow.camera, { left: -0.3, right: 0.3, top: 0.3, bottom: -0.3, near: 0.1, far: 2 });
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xfff3e6, 0.8); fill.position.set(-0.5, 0.3, -0.4); scene.add(fill);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(0.6, 64), new THREE.ShadowMaterial({ opacity: 0.18 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const pieces = {};
+const loader = new THREE.GLTFLoader();
+function load(name, file) {
+  return new Promise((res, rej) => loader.load("models/" + file, g => {
+    const mesh = g.scene.getObjectByProperty("type", "Mesh");
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.material = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
+    pieces[name] = { root: g.scene, mesh, extras: g.scene.children[0].userData };
+    scene.add(g.scene); res();
+  }, undefined, rej));
+}
+
+function setGlaze(name, glaze) {
+  pieces[name].mesh.material.color.set(GLAZES[glaze]).convertSRGBToLinear();
+  document.querySelectorAll(`#sw-${name} button`).forEach(b => b.setAttribute("aria-pressed", b.dataset.g === glaze));
+}
+function buildSwatches(name, initial) {
+  const box = document.getElementById("sw-" + name);
+  for (const [g, hex] of Object.entries(GLAZES)) {
+    const b = document.createElement("button");
+    b.className = "sw"; b.style.background = hex; b.dataset.g = g; b.title = g; b.setAttribute("aria-label", g);
+    b.onclick = () => setGlaze(name, g);
+    box.appendChild(b);
+  }
+  setGlaze(name, initial);
+}
+
+let target = { px: -0.1, by: 0, bx: 0.1 }, cur = { ...target };
+function setView(stacked) {
+  const off = pieces.bowl.extras.stackOffsets["on_plato-chico-17cm"];
+  target = stacked ? { px: 0, by: off, bx: 0 } : { px: -0.1, by: 0, bx: 0.1 };
+  document.getElementById("v-apart").setAttribute("aria-pressed", !stacked);
+  document.getElementById("v-stack").setAttribute("aria-pressed", stacked);
+}
+document.getElementById("v-apart").onclick = () => setView(false);
+document.getElementById("v-stack").onclick = () => setView(true);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function tick() {
+  const k = reduce ? 1 : 0.12;
+  for (const p of ["px", "by", "bx"]) cur[p] += (target[p] - cur[p]) * k;
+  if (pieces.plate) { pieces.plate.root.position.x = cur.px; pieces.bowl.root.position.set(cur.bx, cur.by, 0); }
+  controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick);
+}
+
+Promise.all([load("plate", "plato-chico-17cm.glb"), load("bowl", "bowl-mediano-15cm.glb")])
+  .then(() => {
+    document.getElementById("status").hidden = true;
+    buildSwatches("plate", "Azul"); buildSwatches("bowl", "Terracota");
+    resize(); tick();
+  })
+  .catch(() => { document.getElementById("status").textContent = "No se pudieron cargar los modelos."; });
+resize();
+</script>
+</body>
+</html>
