@@ -7,6 +7,7 @@ Visor 3D en Three.js para vajilla modular: orbitar las piezas, cambiar el color 
 - `index.html` – visor (Three.js r147 desde CDN, sin build)
 - `models/` – modelos GLB en metros, con el pivote en el centro de la base
 - `scripts/generate.py` – genera los GLB a partir de perfiles 2D y calcula los offsets de apilado
+- `scripts/prepare_model.py` – script de Blender: escala, limpieza, origen en la base, reducción de triángulos, suavizado, material `glaze` y exportación GLB
 - `scripts/rebuild_round.py` – reconstruye una pieza redonda exportada de Blender como sólido de revolución limpio
 
 ## Modelos
@@ -27,6 +28,15 @@ python3 scripts/generate.py
 ```
 
 ## Piezas desde Blender
+
+Preparar una carpeta de modelos (OBJ, FBX, STL, GLB) desde la terminal:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/prepare_model.py -- \
+  --in ~/Desktop/modelos --out ~/Desktop/glb --units mm
+```
+
+O dentro de Blender: seleccionar la pieza, abrir el script en la pestaña Scripting y ejecutarlo.
 
 Para piezas redondas (platos, bowls, vasos sin asa), después de exportar el GLB:
 
