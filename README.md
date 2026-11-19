@@ -14,6 +14,7 @@ Visor 3D en Three.js para vajilla modular: orbitar las piezas, cambiar el color 
 |---|---|---|
 | Plato chico | 17.5 × 2 cm | ~3,500 |
 | Bowl mediano | 15 × 7 cm | ~4,200 |
+| Vaso | 8.3 × 9.6 cm | ~10,900 |
 
 Cada GLB guarda en `extras` sus medidas y `stackOffsets` (altura a la que se apoya sobre otra pieza).
 
