@@ -1,6 +1,6 @@
 # 3D Test
 
-Visor 3D en Three.js para vajilla modular: orbitar las piezas y cambiar el color de cada una. Muestra las dos teteras y el vaso.
+Visor 3D en Three.js para vajilla modular: orbitar las piezas y cambiar el color de cada una. Muestra las dos teteras, el vaso y la taza mocha.
 
 ## Estructura
 
@@ -19,6 +19,7 @@ Visor 3D en Three.js para vajilla modular: orbitar las piezas y cambiar el color
 | Vaso | 8.3 × 9.6 cm | ~8,300 |
 | Tetera asa superior | 15.2 × 13.5 × 22.5 cm | ~20,000 |
 | Tetera asa lateral | 20.2 × 13.5 × 15 cm | ~20,000 |
+| Taza mocha sin asa | 9.4 × 8.4 cm | ~6,900 |
 
 Cada GLB guarda en `extras` sus medidas y `stackOffsets` (altura a la que se apoya sobre otra pieza).
 
