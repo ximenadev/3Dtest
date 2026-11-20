@@ -48,6 +48,8 @@ python3 scripts/rebuild_round.py vaso-blender.glb models/vaso.glb
 
 El script corta la pieza por su eje para obtener el perfil exacto y lo gira 360° con anillos uniformes. Mantiene la silueta original, centra la base en el origen, conserva los bordes marcados (labio, pie) y elimina las franjas de luz que dejan los triángulos largos de los archivos CAD. No sirve para piezas con asa o pico.
 
+También repara defectos comunes de los archivos CAD: cierra huecos en la superficie (hasta 10 mm), cierra agujeros en el centro de la base o del fondo, quita tapas o caras sueltas que tapan la abertura e ignora caras sueltas. Al terminar, imprime qué reparó.
+
 ## Local
 
 ```bash

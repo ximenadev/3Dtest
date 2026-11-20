@@ -20,6 +20,9 @@ import numpy as np
 SEGMENTS = 96            # slices around the piece
 SIMPLIFY_TOL = 0.0001    # meters (0.1 mm): profile points closer than this to a straight line are dropped
 SHARP_ANGLE = 35         # degrees: profile corners sharper than this get a hard edge
+SLICE_ANGLES = [0.0, 0.0123, 0.7, 1.4, 2.1, 2.8, 3.5, 4.2, 4.9, 5.6]  # radians tried for the slice
+MAX_GAP = 0.01           # meters (10 mm): holes in the mesh up to this size get closed
+AXIS_TOL = 0.0002        # meters (0.2 mm): outline points this close to the center count as on the axis
 
 
 # --------------------------------------------------------------------------- reading
@@ -58,6 +61,11 @@ def read_mesh(path):
 
 def cross_section(pos, tri):
     """Segments where the mesh crosses the half-plane z = 0, x >= 0, as (r, y) pairs."""
+    # Skip zero-area triangles: CAD exports often contain long, flat slivers that draw
+    # nothing but would add fake lines to the cross-section.
+    t = pos[tri]
+    area2 = np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1)
+    tri = tri[area2 > 1e-12]
     segs = []
     for a, b, c in tri:
         pts = []
@@ -90,22 +98,97 @@ def chain(segs):
         pts[kp], pts[kq] = p, q
         adj.setdefault(kp, []).append(kq)
         adj.setdefault(kq, []).append(kp)
+    if any(len(v) > 2 for v in adj.values()):
+        sys.exit("Cross-section branches (faces stacked on top of each other): clean the mesh in Blender first")
+
+    # Split the cross-section into separate pieces; holes in the mesh leave gaps between them.
     ends = [k for k, v in adj.items() if len(v) == 1]
-    if len(ends) != 2:
-        sys.exit(f"Cross-section is not one clean line ({len(ends)} loose ends): check the mesh for holes")
-    start = min(ends, key=lambda k: pts[k][1])  # start at the bottom of the base
-    line, prev, cur = [start], None, start
-    while True:
-        nxt = [k for k in adj[cur] if k != prev]
-        if not nxt:
+    pieces, seen = [], set()
+    for e in ends:
+        if e in seen:
+            continue
+        line, prev, cur = [e], None, e
+        while True:
+            nxt = [k for k in adj[cur] if k != prev]
+            if not nxt:
+                break
+            prev, cur = cur, nxt[0]
+            line.append(cur)
+        seen.update(line)
+        pieces.append(line)
+    if len(seen) != len(adj):
+        sys.exit("Cross-section has a separate closed part: this piece isn't a single round shape")
+
+    on_axis = lambda k: pts[k][0] <= AXIS_TOL
+
+    # The main outline is the piece that reaches the outer wall (largest radius). Start at its
+    # end on the center axis (or its lower end) and follow it; whenever it stops at a hole,
+    # bridge to the nearest loose end of another piece, until the outline reaches the axis again.
+    main = max(pieces, key=lambda p: max(pts[k][0] for k in p))
+    a0, a1 = on_axis(main[0]), on_axis(main[-1])
+    if (a1 and not a0) or (a0 == a1 and pts[main[0]][1] > pts[main[-1]][1]):
+        main = main[::-1]
+    line = [pts[k] for k in main]
+    rest, gaps, centers = [p for p in pieces if p is not main], [], []
+    if line[0][0] > AXIS_TOL:  # hole in the middle of the base
+        centers.append(line[0][0])
+        line.insert(0, (0.0, line[0][1]))
+    while line[-1][0] > AXIS_TOL:
+        here = np.array(line[-1])
+        best, flip, dist = None, False, np.inf
+        for p in rest:
+            for idx, rev in ((0, False), (-1, True)):
+                d = np.linalg.norm(np.array(pts[p[idx]]) - here)
+                if d < dist:
+                    best, flip, dist = p, rev, d
+        if best is None or dist > MAX_GAP:
+            # Nothing near enough to connect to: close the opening straight across to the center.
+            centers.append(line[-1][0])
+            line.append((0.0, line[-1][1]))
             break
-        prev, cur = cur, nxt[0]
-        line.append(cur)
-    if len(line) != len(adj):
-        sys.exit("Cross-section has several separate parts: this piece isn't a single round shape")
-    prof = np.array([pts[k] for k in line])
+        gaps.append(dist)
+        line += [pts[k] for k in (best[::-1] if flip else best)]
+        rest = [p for p in rest if p is not best]
+    notes = []
+    if gaps:
+        notes.append(f"Closed {len(gaps)} gap(s) in the mesh: " + ", ".join(f"{g*1000:.1f} mm" for g in gaps))
+    if centers:
+        notes.append(f"Closed {len(centers)} hole(s) at the center: " + ", ".join(f"{2*c*1000:.1f} mm across" for c in centers))
+    if rest:
+        notes.append(f"Ignored {len(rest)} loose piece(s) not connected to the outline (stray faces)")
+    # Fewer breaks = cleaner slice; used to pick the best slice angle.
+    score = (len(gaps) + len(centers) + len(rest), sum(gaps))
+
+    prof, fold_note = remove_folds(np.array(line))
+    notes += fold_note
+    if prof[0, 1] > prof[-1, 1]:  # the outline must start under the base, not on the inside floor
+        prof = prof[::-1]
     prof[0, 0] = prof[-1, 0] = 0.0
-    return prof
+    return prof, notes, score
+
+
+def remove_folds(prof):
+    """Drop parts of the outline that run out and straight back over themselves.
+
+    A zero-thickness surface, like a lid left across the opening of a cup, shows up in the
+    cross-section as a line that goes to the center and returns along the same path.
+    """
+    out = []
+    for p in prof:
+        out.append(p)
+        while len(out) >= 3:
+            a, b = out[-2] - out[-3], out[-1] - out[-2]
+            la, lb = np.linalg.norm(a), np.linalg.norm(b)
+            if la == 0 or lb == 0:
+                out.pop(-2)
+                continue
+            straight_back = np.dot(a, b) / (la * lb) < -0.999 and abs(a[0] * b[1] - a[1] * b[0]) < 1e-9
+            if not straight_back:
+                break
+            out.pop(-2)  # the turning point; the overlap shortens until the path no longer folds
+    removed = len(prof) - len(out)
+    note = [f"Removed a surface that folds back on itself ({removed} outline points), e.g. a lid over an opening"] if removed else []
+    return np.array(out), note
 
 
 def simplify(p, tol):
@@ -232,7 +315,27 @@ def main(src, dst, segments=SEGMENTS):
     pos, tri, name = read_mesh(src)
     lo, hi = pos.min(0), pos.max(0)
     pos = pos - [(lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2]  # base center to origin
-    prof = chain(cross_section(pos, tri))
+    # Turn the slice plane slightly so it doesn't pass exactly through vertices on the axis.
+    # Slice at several angles and keep the cleanest one: a slice through a flawed spot of the
+    # mesh breaks the outline into pieces, while the shape itself is the same all the way around.
+    best = None
+    for a in SLICE_ANGLES:
+        rot = np.array([[np.cos(a), 0, -np.sin(a)], [0, 1, 0], [np.sin(a), 0, np.cos(a)]])
+        try:
+            result = chain(cross_section(pos @ rot, tri))
+        except SystemExit as err:
+            if best is None:
+                best_error = err
+            continue
+        if best is None or result[2] < best[2]:
+            best = result
+        if best[2][0] == 0:
+            break
+    if best is None:
+        raise best_error
+    prof, notes, _ = best
+    for n in notes:
+        print(n)
     prof = simplify(prof, SIMPLIFY_TOL)
     total = np.linalg.norm(np.diff(prof, axis=0), axis=1).sum()
     out = lathe(split_runs(prof, SHARP_ANGLE), segments, total)
