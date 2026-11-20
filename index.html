@@ -78,7 +78,7 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(0.6, 64), new THREE.Shado
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
 // Bump when a model file changes, so browsers fetch the new one.
-const MODELS_VERSION = "4";
+const MODELS_VERSION = "5";
 const pieces = {};
 const loader = new THREE.GLTFLoader();
 function load(name, file) {
