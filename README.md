@@ -1,11 +1,11 @@
 # 3D Test
 
-Visor 3D en Three.js para vajilla modular: orbitar las piezas, cambiar el color y ver el bowl apilado sobre el plato.
+Visor 3D en Three.js para vajilla modular: orbitar las piezas y cambiar el color de cada una. Muestra la tetera y el vaso.
 
 ## Estructura
 
 - `index.html` – visor (Three.js r147 desde CDN, sin build)
-- `models/` – modelos GLB en metros, con el pivote en el centro de la base
+- `models/` – modelos GLB en metros, con el pivote en el centro de la base (el plato y el bowl generados siguen aquí, aunque el visor ya no los muestra)
 - `scripts/generate.py` – genera los GLB a partir de perfiles 2D y calcula los offsets de apilado
 - `scripts/prepare_model.py` – script de Blender: escala, limpieza, origen en la base, reducción de triángulos, suavizado, material `glaze` y exportación GLB
 - `scripts/rebuild_round.py` – reconstruye una pieza redonda exportada de Blender como sólido de revolución limpio
@@ -17,6 +17,7 @@ Visor 3D en Three.js para vajilla modular: orbitar las piezas, cambiar el color 
 | Plato chico | 17.5 × 2 cm | ~3,500 |
 | Bowl mediano | 15 × 7 cm | ~4,200 |
 | Vaso | 8.3 × 9.6 cm | ~8,300 |
+| Tetera asa superior | 15.2 × 13.5 × 22.5 cm | ~19,300 |
 
 Cada GLB guarda en `extras` sus medidas y `stackOffsets` (altura a la que se apoya sobre otra pieza).
 
